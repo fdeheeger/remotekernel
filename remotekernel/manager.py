@@ -57,8 +57,13 @@ class RemoteIOLoopKernelManager(KernelManager):
              keyword arguments that are passed down to build the kernel_cmd
              and launching the kernel (e.g. Popen kwargs).
         """
-        self.host = self.kernel_spec.host
-        # allow a different username in host
+        try:
+            self.host = self.kernel_spec.host
+        except AttributeError:
+            self.kernel_spec.host = "localhost"
+            self.host = "localhost"
+            return super(RemoteIOLoopKernelManager, self).start_kernel(**kw)
+            
         if '@' in self.host:
             self.ip = socket.gethostbyname(self.kernel_spec.host.split('@')[1])
         else:
