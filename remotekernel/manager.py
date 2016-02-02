@@ -78,7 +78,11 @@ class RemoteIOLoopKernelManager(KernelManager):
         # This may be OSX only. It ensures passwordless login works.
 
         # decide where to copy the connection file on the remote host
-        get_remote_home = Popen(['ssh', self.host, 'echo', '$HOME'], stdin=PIPE, stdout=PIPE)
+        get_remote_home_ = ['ssh', self.host, 'echo', '$HOME']
+        if os.name == 'nt':
+            get_remote_home_ = ' '.join(get_remote_home_)
+
+        get_remote_home = Popen(get_remote_home_, stdin=PIPE, stdout=PIPE)
         if get_remote_home.wait() != 0:
             raise RuntimeError("Failed to connect to remote host {0}"
                                "".format(self.ip))
@@ -86,16 +90,22 @@ class RemoteIOLoopKernelManager(KernelManager):
         remote_home = result.decode()[:-1]
         remote_connection_file = os.path.join(
                 remote_home, '.ipython', 'kernels',
-                os.path.basename(self.connection_file))
+                os.path.basename(self.connection_file)).replace('\\', '/')
 
         # copy the connection file to the remote machine
-        remote_connection_file_dir = os.path.dirname(remote_connection_file)
-        mkdirp = Popen(['ssh', self.host, 'mkdir', '-p', remote_connection_file_dir])
+        remote_connection_file_dir = os.path.dirname(remote_connection_file).replace('\\', '/')
+        mkdirp_ = ['ssh', self.host, 'mkdir', '-p', remote_connection_file_dir]
+        if os.name == 'nt':
+            mkdirp_ = ' '.join(mkdirp_)
+        mkdirp = Popen(mkdirp_)
         if mkdirp.wait() != 0:
             raise RuntimeError("Failed to create directory for connection "
                                "file on remote host {0}".format(self.ip))
-        transfer = Popen(['scp', self.connection_file,
-                          '{0}:{1}'.format(self.host, remote_connection_file)])
+        transfer_ = ['scp', ('"' + self.connection_file + '"').replace('\\', '/').replace('C:', '/c'),
+                          '{0}:{1}'.format(self.host, remote_connection_file)]
+        if os.name == 'nt':
+            transfer_ = ' '.join(transfer_)                          
+        transfer = Popen(transfer_)
         if transfer.wait() != 0:
             raise RuntimeError("Failed to copy connection file to host {0}"
                                "".format(self.ip))
@@ -105,8 +115,11 @@ class RemoteIOLoopKernelManager(KernelManager):
         # if len(kernel_cmd) > 6:
         #     kernel_cmd[6] = remote_profile_dir = os.path.join(remote_connection_file_dir, '..', 'profile_default')
         kernel_cmd.append('--debug')
-        self.kernel = Popen(['ssh', self.host,
-                             '{0}'.format(' '.join(kernel_cmd))],
+        kernel_cmd_ = ['ssh', self.host,
+                             '{0}'.format(' '.join(kernel_cmd))]
+        if os.name == 'nt':
+            kernel_cmd_ = ' '.join(kernel_cmd_)                               
+        self.kernel = Popen(kernel_cmd_,
                             stdout=PIPE, stdin=PIPE, env=os.environ)
         # self.start_restarter()
         self._connect_control_socket()
